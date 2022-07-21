@@ -139,7 +139,7 @@ View(time_by_poll$"OZONE")
 ```{r} 
 
 #Use TS to look at the general trends of the data at each site to determine which have sufficient data  
-##site data with < 80% of pollutant recordings (recording majority 0) between 2012 and 2022 are omitted  
+##site data with < 70% of pollutant recordings (recording majority 0) between 2012 and 2022 are omitted  
 ###Manually screen data for data recording sufficiency
 ####Repeat for all site in all pollutants 
 
@@ -226,7 +226,6 @@ ts(time_by_poll$PM2.5$LIDCOMBE)
 
 #Visualising 
 ### Plot the timeseries data for target locations and pollutants 
-
 ```{r} 
 
 #plot the time series data to in interactive time plot  
@@ -248,20 +247,9 @@ dygraph(pol.graph, main = "Ozone at Wollongong") %>%
 
   dyOptions( stemPlot=TRUE) 
 
-
-target_pollutants = c("PM10", "OZONE", "NO", "NO2") 
-
-target_sites = c("WOLLONGONG", "MUSWELLBROOK", "SINGLETON", "CAMBERWELL", "WAGGAWAGGANORTH", "RICHMOND", "CAMDEN", "CHULLORA", "EARLWOOD",  "WALLSEND", "BERESFIELD", "BARGO", "BRINGELLY", "PROSPECT", "STMARYS", "OAKDALE", "RANDWICK", "ROZELLE", "NEWCASTLE", "KEMBLAGRANGE", "ALBIONPARKSOUTH") 
-
-  
-Ozone.graph <- xts(time_by_poll$OZONE$target_sites, order.by = time_by_poll$OZONE$Date) 
-
-dygraph(pol.graph, main = "Pollutants across sites") 
-
-dyOptions(stackedGraph = TRUE) 
-
   
 
+#Plot multiple locations on a single dygraph
 
 Ozone.sites = cbind(WOLLONGONG = ts(data = time_by_poll$OZONE$WOLLONGONG, start = c(2012,1), frequency = 12), 
 
@@ -270,8 +258,6 @@ Ozone.sites = cbind(WOLLONGONG = ts(data = time_by_poll$OZONE$WOLLONGONG, start 
                     WAGGAWAGGANORTH = ts(data = time_by_poll$OZONE$WAGGAWAGGANORTH, start = c(2012,1), frequency = 12), 
 
                     CAMDEN = ts(data = time_by_poll$OZONE$CAMDEN, start = c(2012,1), frequency = 12)) 
-
-  
 
 dygraph(data = Ozone.sites,  
 
@@ -284,8 +270,9 @@ dygraph(data = Ozone.sites,
           color = c("blue", "green", "black")) %>% 
 
   dyRoller(rollPeriod = 12)%>% 
-
+  
   dyRangeSelector() 
+
 
 ```
 
@@ -358,9 +345,14 @@ dev.off()
 
 #Binomial GLM - Need to account for the effects surrounding daily data may have
 
+#Show data skew 
+
+
+#log transform data 
+
+
 
 #Binomial for individual sites? Grouped site regions? 
-
 
 
 ```
@@ -374,8 +366,10 @@ dev.off()
 
 Pointfile <- read.csv("Data/PointFile.csv") 
 
+#sts.sf vibes 
 
 ```
+
 
 
 #Load and Clean Meterological Data 
