@@ -1,0 +1,429 @@
+--- 
+
+title: "AirPolDataAnalysis" 
+
+author: "Hannah Beaton" 
+
+date: "07/07/2022" 
+
+output: html_document 
+
+--- 
+
+#Load packages 
+
+```{r} 
+
+  
+
+#install.packages("Rbeast")  
+
+
+#install.packages("bfast")  
+
+#install.packages("tidyverse")  
+
+#install.packages("ggplot2")  
+
+#install.packages("dpylr")  
+
+#install.packages("lubridate")  
+
+#install.packages("tidyr")  
+  
+#install.packages("sf") 
+
+
+library("Rbeast")  
+
+library("tidyverse")  
+  
+library("ggplot2")  
+
+library(dplyr)  
+
+library(tidyr)  
+
+library(sf) 
+
+library("lubridate") 
+
+library(reshape2) 
+
+``` 
+
+
+#Load Site Data 
+
+```{r} 
+
+#set working directory  
+setwd("~/Desktop/BEES3041/AirPollAnalysis")
+
+
+#Load Site Air pollution Data   
+
+PolSite1 <- read.csv("Data/AirPolData/AirPol_24hr_Site1.csv")  
+PolSite2 <- read.csv("Data/AirPolData/AirPol_24hr_Site2.csv")  
+PolSite3 <- read.csv("Data/AirPolData/AirPol_24hr_Site3.csv")  
+PolSite4 <- read.csv("Data/AirPolData/AirPol_24hr_Site4.csv")  
+PolSite5 <- read.csv("Data/AirPolData/AirPol_24hr_Site5.csv")  
+
+``` 
+
+
+#Clean and Combine Site Data 
+###Split Pollutants, Sites and Dates into distinguished columns to organise data frames corresponding to each pollutant of interest 
+
+```{r} 
+
+PollSites <- cbind(PolSite1, PolSite2, PolSite3, PolSite4, PolSite5) 
+
+#break into a list by pollutants with column pollutant split from column site  
+
+#df with the names 
+
+time_by_poll = list() 
+
+for (colname in colnames(PollSites)) { 
+
+# Split the column headers on the dots 
+
+  parts = unlist(strsplit(colname, ".", fixed=TRUE)) 
+
+  # message(parts) 
+
+  site = parts[1] 
+
+  if (length(parts) == 2) { 
+
+    pollutant = parts[2] 
+
+  } 
+
+# reassemble with Site (1) and Pollutants (2) 
+
+  else { 
+
+    pollutant = paste (parts[2], parts[3], sep=".") 
+
+  } 
+
+
+  #  create data frame 
+
+  if (is.null(time_by_poll[[pollutant]])) { 
+
+    dates = lubridate::dmy(PollSites[["Date"]]) #makes "Date" a date class 
+
+    time_by_poll[[pollutant]] = data.frame (Date = dates) 
+
+  } else { 
+    time_by_poll[[pollutant]][site] = PollSites[[colname]] 
+  } 
+
+} 
+
+#output now gives a data frame for each of the 8 pollutants for every corresponding site and date  
+
+#Pollutants data frame = SO2, NO, NO2, OZONE, PM2.5, PM10, CO, H3  
+
+View(time_by_poll$"OZONE") 
+
+``` 
+
+
+#Data Screening 
+### Omit insufficient data recordings and incomplete site and pollution analysis 
+
+```{r} 
+
+#Use TS to look at the general trends of the data at each site to determine which have sufficient data  
+##site data with < 80% of pollutant recordings (recording majority 0) between 2012 and 2022 are omitted  
+###Manually screen data for data recording sufficiency
+####Repeat for all site in all pollutants 
+
+
+ts(time_by_poll$PM2.5$LIDCOMBE) 
+
+  plot.ts(time_by_poll$PM2.5$LIDCOMBE)  
+
+   
+  ts(time_by_poll$NO$LIDCOMBE) 
+
+  plot.ts(time_by_poll$NO$LIDCOMBE)  
+   
+
+  ts(time_by_poll$NO2$LIDCOMBE) 
+
+  plot.ts(time_by_poll$NO2$LIDCOMBE)  
+
+   
+  ts(time_by_poll$OZONE$LIDCOMBE) 
+
+  plot.ts(time_by_poll$OZONE$LIDCOMBE) 
+
+
+  ts(time_by_poll$PM10$LIDCOMBE) 
+
+  plot.ts(time_by_poll$PM10$LIDCOMBE)  
+
+
+#GOOD DATA -  OZONE, NO, NO2,PM10 - 4 POLLUTANTS / 21 LOCATIONS  
+
+##Wollongong  
+##MUSWELLBROOK 
+##SINGLETON 
+##CAMBERWELL 
+##WAGGAWAGGANORTH 
+##RICHMOND 
+##CAMDEN 
+##CHULLORA 
+##EARLWOOD 
+##WALLSEND 
+##BERESFIELD 
+##BARGO  
+##BRINGELLY  
+##PROSPECT 
+##STMARYS 
+##OAKDALE 
+##RANDWICK 
+##ROZELLE 
+##NEWCASTLE 
+#KEMBLAGRANGE 
+#ALBIONPARKSOUTH 
+  
+### BAD Data ###  
+
+#OMIT (CO, SO2, H3, PM2.5)  
+
+###TAMWORTH#### 
+###NARRABRI### 
+####GUNNEDAH### 
+####ARMIDALE###
+####ORANGE### 
+####PORTMACQUARIE### 
+####COFFSHARBOUR### 
+####MORISSET - one of the worst - good to show  
+###ALBURY - NO2 one of the worst  
+###MERRIWA### 
+####LIVERPOOL#### 
+####BRADFIELDHIGHWAY#### 
+####KATOOMBA### 
+###GOULBURN### 
+###CAMMERAY#### 
+###PARRAMATTANORTH### 
+####ROUSEHILL### 
+###PENRITH### 
+###MACARTHUR#### 
+####CARRINGTON#### 
+###STOCKTON#### 
+###MAYFIELD### 
+###MACQUARIEPARK### 
+###LIDCOMBE##### 
+``` 
+
+
+#Visualising 
+### Plot the timeseries data for target locations and pollutants 
+
+```{r} 
+
+#plot the time series data to in interactive time plot  
+
+install.packages("dygraphs") 
+
+library(dygraphs) 
+
+install.packages("xts") 
+
+library(xts) 
+
+
+#plot for a single site and single pollutant  
+
+pol.graph <- xts(time_by_poll$OZONE$WOLLONGONG, order.by = time_by_poll$OZONE$Date) 
+
+dygraph(pol.graph, main = "Ozone at Wollongong") %>% 
+
+  dyOptions( stemPlot=TRUE) 
+
+
+target_pollutants = c("PM10", "OZONE", "NO", "NO2") 
+
+target_sites = c("WOLLONGONG", "MUSWELLBROOK", "SINGLETON", "CAMBERWELL", "WAGGAWAGGANORTH", "RICHMOND", "CAMDEN", "CHULLORA", "EARLWOOD",  "WALLSEND", "BERESFIELD", "BARGO", "BRINGELLY", "PROSPECT", "STMARYS", "OAKDALE", "RANDWICK", "ROZELLE", "NEWCASTLE", "KEMBLAGRANGE", "ALBIONPARKSOUTH") 
+
+  
+Ozone.graph <- xts(time_by_poll$OZONE$target_sites, order.by = time_by_poll$OZONE$Date) 
+
+dygraph(pol.graph, main = "Pollutants across sites") 
+
+dyOptions(stackedGraph = TRUE) 
+
+  
+
+
+Ozone.sites = cbind(WOLLONGONG = ts(data = time_by_poll$OZONE$WOLLONGONG, start = c(2012,1), frequency = 12), 
+
+                    RICHMOND = ts(data = time_by_poll$OZONE$RICHMOND, start = c(2012,1), frequency = 12), 
+
+                    WAGGAWAGGANORTH = ts(data = time_by_poll$OZONE$WAGGAWAGGANORTH, start = c(2012,1), frequency = 12), 
+
+                    CAMDEN = ts(data = time_by_poll$OZONE$CAMDEN, start = c(2012,1), frequency = 12)) 
+
+  
+
+dygraph(data = Ozone.sites,  
+
+        main = "Ozone pollution") %>% 
+
+  dySeries(name = "WOLLONGONG", stepPlot = FALSE, color = "red") %>% 
+
+  dyGroup(c("RICHMOND", "WAGGAWAGGANORTH", "CAMDEN"), drawPoints = FALSE,  
+
+          color = c("blue", "green", "black")) %>% 
+
+  dyRoller(rollPeriod = 12)%>% 
+
+  dyRangeSelector() 
+
+```
+
+
+#Rbeast Irregular 
+### Plotting the decomposition and change points of Pollution and Site data using the package (Beast) 
+```{r}
+
+library(Rbeast)
+
+# Zhao Rbeast Example - Run to manipluate to Air_poll Data 
+# Monthly data Example 
+df    = read.csv('https://github.com/zhaokg/Rbeast/raw/master/R/SampleData/pm10_1658112168.csv',header=FALSE,skip=3)
+
+dates = as.Date(df[,1], "%d/%m/%Y")  # the 1st col is dates
+Y     = df[,2:ncol(df)]              # the rest are PM10 data for the several sample sites
+                                  # e.g., Y[,1] for the first region (WOLLONGONG)
+
+o = beast.irreg(log(Y[,1]),time=dates,deltat=1/12, freq=12, tseg.min=3, sseg.min=6)
+plot(o)
+
+# log(Y[,1]) :  Log-transformation may help if data is skewed bcz the BEAST model 
+                assumes Gaussian errors;
+# time=dates :  Use the 'time' arg to supply the times of individual data points.
+               Alternatively, the `beast123' function also handles date strings of different formats
+# deltat=1/12:  Aggregate the daily time series into a regular one at the interval 
+                of 1 month=1/12 year
+# freq=12 :    The period is 1 year, which is 12 data points (1.0/deltat=12)
+# tseg.min:     The minimum trend segment length allowed in the changepoint detection is 3 data points (3 months) 
+                -- the results MAY be sensitive to this parameter
+# sseg.min:     The minimum seasonal segment length allowed in the changepoint detection is 6 data points (6 months) 
+                -- the results MAY be sensitive to this parameter
+
+
+#Daily Rbeast time series decomposition using time_by_poll Site data 
+## Manually compute for each target pollutant (NO2,OZONE,PM10) 
+## Manually compute for each target site (18-24)
+### This allows individual data to be assessed for sites oncemore and allow invidual .tiff files to be named accordingly and exported 
+
+#### View the data frame to know which target location corresponds to each , :ncol
+View(time_by_poll$OZONE)
+
+
+tiff("OZONE_RICHMOND")
+
+dates = as.Date(time_by_poll$OZONE[,1], "%d/%m/%Y")  
+Y     = time_by_poll$OZONE[,17:ncol(time_by_poll$OZONE)] #Example ncol 17 = RICHMOND (target site = TRUE)
+Y[Y==0]=NA 
+
+OZONE_RICHMOND = beast.irreg( log(Y[,1]),time=dates,  deltat = 1/365, freq=365/1,  tseg.min=30, sseg.min=180)
+plot(OZONE_RICHMOND)
+
+dev.off() 
+
+
+
+
+#Compute for each Site Region 
+##(Industrial, Urban, Rural) for (NO2, OZONE, PM10)
+### Use DPIE Point file data to classify target sites 
+
+
+
+```
+
+
+#Binomial Analysis 
+## Computing to see if there is significant difference between sites and their air pollution concentrations 
+```{r}
+
+#Binomial GLM - Need to account for the effects surrounding daily data may have
+
+
+#Binomial for individual sites? Grouped site regions? 
+
+
+
+```
+
+
+#Make Point file into an SF object to begin rasterisation 
+### Aim is to plot the pollution data concentrations over time within NSW 
+#### This will then be correlated with NSW local government zoning (industrial/urban/rural)
+```{r}
+#load point file data 
+
+Pointfile <- read.csv("Data/PointFile.csv") 
+
+
+```
+
+
+#Load and Clean Meterological Data 
+### Eventually might look into the impacts meterological variables have on Air Pollution 
+```{r}
+
+#Load Meteorological data  
+
+TempHrData<- read.csv("Data/MeteorData/AirTemp/TsTemp_1hr.csv") 
+
+HumidHrData<- read.csv("Data/MeteorData/Humidity/TsHumid_1hr.csv") 
+
+WsHrData <- read.csv("Data/MeteorData/WindSpeed/TsWS_1hr.csv") 
+
+  
+#remove top empty row and rename columns  
+
+
+#temp 
+
+names(TempHrData) <- TempHrData[1,] 
+
+TempHr <- TempHrData[-1,] 
+
+colnames(TempHr)[1] <- c('Date')  
+
+colnames(TempHr)[2] <- c('Time') 
+
+
+#wind speed  
+
+names(WsHrData) <- WsHrData[2,] 
+
+WsHr <- WsHrData[-1,] 
+
+WsHr <- WsHr[-1,] 
+
+
+#Humidity 
+
+names(HumidHrData) <- HumidHrData[2,] 
+
+HumidHr <- HumidHrData[-1,] 
+
+HumidHr <- WsHr[-1,] 
+
+  
+```
+
+
+
