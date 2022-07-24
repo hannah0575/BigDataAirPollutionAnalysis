@@ -604,7 +604,7 @@ plot(o)
 View(time_by_poll$OZONE)
 
 
-tiff("OZONE_RICHMOND")
+#tiff("OZONE_RICHMOND")
 
 dates = as.Date(tSiteList$OZONE[,1], "%d/%m/%Y")  
 Y     = tSiteList$OZONE[,17:ncol(tSiteList$OZONE)] #Example ncol 17 = RICHMOND (target site = TRUE)
@@ -613,11 +613,14 @@ Y[Y==0]=NA
 OZONE_RICHMOND = beast.irreg( log(Y[,1]),time=dates,  deltat = 1/365, freq=365/1,  tseg.min=30, sseg.min=180)
 plot(OZONE_RICHMOND)
 
-dev.off() 
+#dev.off() 
 
 
 #Create Loop... for each location and each pollutant 
 ### Collect the outputs (R2 & NCP for Trend & season)
+
+
+
 
 
 
