@@ -10,14 +10,11 @@ output: html_document
 
 --- 
 
-#Load packages 
+#1.Load packages 
 
 ```{r} 
 
-  
-
 #install.packages("Rbeast")  
-
 
 #install.packages("bfast")  
 
@@ -32,6 +29,9 @@ output: html_document
 #install.packages("tidyr")  
   
 #install.packages("sf") 
+
+#install.packages("vegan")
+
 
 
 library("Rbeast")  
@@ -50,11 +50,12 @@ library("lubridate")
 
 library(reshape2) 
 
+library(vegan)
+
 ``` 
 
 
-#Load Site Data 
-
+#1.1. Load Site Data 
 ```{r} 
 
 #set working directory  
@@ -71,10 +72,8 @@ PolSite5 <- read.csv("Data/AirPolData/AirPol_24hr_Site5.csv")
 
 ``` 
 
-
-#Clean and Combine Site Data 
-###Split Pollutants, Sites and Dates into distinguished columns to organise data frames corresponding to each pollutant of interest 
-
+#2.Clean and Combine Site Data 
+###2.1. Split Pollutants, Sites and Dates into distinguished columns to organise data frames corresponding to each pollutant of interest 
 ```{r} 
 
 PollSites <- cbind(PolSite1, PolSite2, PolSite3, PolSite4, PolSite5) 
@@ -128,14 +127,13 @@ for (colname in colnames(PollSites)) {
 
 #Pollutants data frame = SO2, NO, NO2, OZONE, PM2.5, PM10, CO, H3  
 
-View(time_by_poll$"OZONE") 
+#View(time_by_poll$"OZONE") 
 
 ``` 
 
 
-#Data Screening 
-### Omit insufficient data recordings and incomplete site and pollution analysis 
-
+#2.2 Data Screening 
+###Omit insufficient data recordings and incomplete site and pollution analysis 
 ```{r} 
 
 #Use TS to look at the general trends of the data at each site to determine which have sufficient data  
@@ -148,6 +146,8 @@ ts(time_by_poll$PM2.5$LIDCOMBE)
 
   plot.ts(time_by_poll$PM2.5$LIDCOMBE)  
 
+#View(time_by_poll$NO2)
+#View(time_by_poll$OZONE)
    
   ts(time_by_poll$NO$LIDCOMBE) 
 
@@ -223,9 +223,170 @@ ts(time_by_poll$PM2.5$LIDCOMBE)
 ###LIDCOMBE##### 
 ``` 
 
+#2.3 Filter data to select only target sites and target pollutants 
+###Create new data frame with target sites to use for the rest of the analysis 
+###tSiteList for BEAST Plotting 
+```{r}
 
-#Visualising 
-### Plot the timeseries data for target locations and pollutants 
+target_tsdata = list() 
+
+for (colname in colnames(PollSites)) { 
+
+# Split the column headers on the dots 
+
+  parts = unlist(strsplit(colname, ".", fixed=TRUE)) 
+
+  # message(parts) 
+
+  site = parts[1] 
+
+  if (length(parts) == 2) { 
+
+    pollutant = parts[2] 
+
+  } 
+
+# reassemble with Site (1) and Pollutants (2) 
+
+  else { 
+
+    pollutant = paste (parts[2], parts[3], sep=".") 
+
+  } 
+
+
+  #  create data frame 
+
+  if (is.null(target_tsdata[[pollutant]])) { 
+
+    dates = lubridate::dmy(PollSites[["Date"]]) #makes "Date" a date class 
+
+    target_tsdata[[pollutant]] = data.frame (Date = dates) 
+
+  } else { 
+    target_tsdata[[pollutant]][site] = PollSites[[colname]] 
+  } 
+
+} 
+
+
+#Create Data Frames and List with just Target Sites 
+###Make data frames with key Target sites 
+TargetSites <- c('Date', 'WOLLONGONG', 'MUSWELLBROOK', 'SINGLETON', 'CAMBERWELL', 'WAGGAWAGGANORTH', 'RICHMOND', 'CAMDEN', 'CHULLORA', 'EARLWOOD', 'WALLSEND', 'BERESFIELD', 'BARGO', 'BRINGELLY', 'PROSPECT', 'STMARYS', 'OAKDALE', 'RANDWICK', 'ROZELLE', 'NEWCASTLE', 'KEMBLAGRANGE', 'ALBIONPARKSOUTH')
+
+tNO2 <- (time_by_poll$NO2[, (colnames(time_by_poll$NO2) %in% c(TargetSites))])
+
+tPM10 <- (time_by_poll$PM10[, (colnames(time_by_poll$PM10) %in% c(TargetSites))])
+
+tOZONE <- (time_by_poll$OZONE[, (colnames(time_by_poll$OZONE) %in% c(TargetSites))])
+
+###List target sites 
+
+tSiteList <- list(tNO2, tPM10, tOZONE)
+
+tSiteList = list(
+  "NO2" = tSiteList[[1]],
+  "PM10" = tSiteList[[2]],
+  "OZONE" = tSiteList[[3]]
+)
+
+#View(tSiteList)
+#View(tSiteList$OZONE)
+
+```
+
+#2.4  Load Point file and Clean to target sites 
+```{r}
+
+Pointfile <- read.csv("~/Desktop/BEES3041/AirPollAnalysis/Data/PointFile.csv") 
+
+#View(Pointfile)
+
+#Make point file for only Target Sites 
+
+TargetSites <- c('Date', 'WOLLONGONG', 'MUSWELLBROOK', 'SINGLETON', 'CAMBERWELL', 'WAGGAWAGGANORTH', 'RICHMOND', 'CAMDEN', 'CHULLORA', 'EARLWOOD', 'WALLSEND', 'BERESFIELD', 'BARGO', 'BRINGELLY', 'PROSPECT', 'STMARYS', 'OAKDALE', 'RANDWICK', 'ROZELLE', 'NEWCASTLE', 'KEMBLAGRANGE', 'ALBIONPARKSOUTH')
+
+TargetPoint <- Pointfile[apply(Pointfile,1,function(x) {any(c(TargetSites) %in% x)}),]
+TargetPoints <- TargetPoint[-103,]
+
+#View(TargetPoints)
+
+```
+
+#Merge Point file and tSitelist Data frames
+###Matches pollution and the site variables 
+###Good for plotting relationships 
+```{r}
+
+#install.packages("data.table")
+library(data.table)
+
+
+# Flip data tables from wide to long 
+OzoneTest.long <- melt(tSiteList$OZONE,
+  id.vars = c("Date"),
+  measure.vars = c('WOLLONGONG', 'WAGGAWAGGANORTH', 'RICHMOND', 'CAMDEN', 'CHULLORA', 'EARLWOOD', 'WALLSEND', 'BERESFIELD', 'BARGO', 'BRINGELLY', 'PROSPECT', 'STMARYS', 'OAKDALE', 'RANDWICK', 'ROZELLE', 'NEWCASTLE', 'KEMBLAGRANGE', 'ALBIONPARKSOUTH'),
+  variable.name = "Sites", value.name = "Ozone"
+)
+#View(OzoneTest.long)
+
+summary(OzoneTest.long$Sites)
+
+#PM10
+PMTest.long <- melt(tSiteList$PM10,
+  id.vars = c("Date"),
+  measure.vars = c('WOLLONGONG', 'WAGGAWAGGANORTH','MUSWELLBROOK', 'SINGLETON', 'CAMBERWELL', 'RICHMOND', 'CAMDEN', 'CHULLORA', 'EARLWOOD', 'WALLSEND', 'BERESFIELD', 'BARGO', 'BRINGELLY', 'PROSPECT', 'STMARYS', 'OAKDALE', 'RANDWICK', 'ROZELLE', 'NEWCASTLE', 'KEMBLAGRANGE', 'ALBIONPARKSOUTH'),
+  variable.name = "Sites", value.name = "PM10"
+)
+
+#View(PMTest.long)
+
+summary(PMTest.long$Sites)
+
+#NO2
+
+NO2Test.long <- melt(tSiteList$NO2,
+  id.vars = c("Date"),
+  measure.vars = c('WOLLONGONG', 'WAGGAWAGGANORTH','MUSWELLBROOK', 'SINGLETON', 'RICHMOND', 'CAMDEN', 'CHULLORA', 'EARLWOOD', 'WALLSEND', 'BERESFIELD', 'BARGO', 'BRINGELLY', 'PROSPECT', 'STMARYS', 'OAKDALE', 'RANDWICK', 'ROZELLE', 'NEWCASTLE', 'KEMBLAGRANGE', 'ALBIONPARKSOUTH'),
+  variable.name = "Sites", value.name = "NO2"
+)
+
+#View(NO2Test.long)
+
+summary(NO2Test.long$Sites)
+
+#Change Target point 'Site' to 'Sites
+TARGETpoints <- rename(TargetPoints, "Sites" = "Site") 
+
+View(TARGETpoints) 
+
+
+### Merge the each pollutant to the Target Point Data  
+library(dplyr)
+
+TargetNO2 <- left_join(NO2Test.long, TARGETpoints, by = "Sites")
+#View(TargetNO2)
+
+TargetOZONE <- left_join(OzoneTest.long, TARGETpoints, by = "Sites")
+#View(TargetOZONE)  
+
+TargetPM <- left_join(PMTest.long, TARGETpoints, by = "Sites")
+#View(TargetPM)  
+      
+TARGETDATA <- list(TargetPM, TargetOZONE, TargetNO2)
+
+TARGETDATA = list(
+  "PM10" = TARGETDATA[[1]],
+  "OZONE" = TARGETDATA[[2]],
+  "NO2" = TARGETDATA[[3]]
+)
+
+#View(TARGETDATA)
+
+```
+
+#3. Visualisation of data 
+### 3.1. Plot the timeseries data for target locations and pollutants 
 ```{r} 
 
 #plot the time series data to in interactive time plot  
@@ -239,25 +400,22 @@ install.packages("xts")
 library(xts) 
 
 
-#plot for a single site and single pollutant  
-
-pol.graph <- xts(time_by_poll$OZONE$WOLLONGONG, order.by = time_by_poll$OZONE$Date) 
-
-dygraph(pol.graph, main = "Ozone at Wollongong") %>% 
-
-  dyOptions( stemPlot=TRUE) 
-
-  
-
 #Plot multiple locations on a single dygraph
+## Find means that vary greatest to plot 
+colMeans(tSiteList$OZONE[sapply(tSiteList$OZONE, is.numeric)]) 
 
-Ozone.sites = cbind(WOLLONGONG = ts(data = time_by_poll$OZONE$WOLLONGONG, start = c(2012,1), frequency = 12), 
+###WAGGAWAGGANORTH = 0.1955185
+###OAKDALE 2.4319698
+###BERESFIELD =  1.4877280 
+###WOLLONGONG = 1.8233194
 
-                    RICHMOND = ts(data = time_by_poll$OZONE$RICHMOND, start = c(2012,1), frequency = 12), 
+Ozone.sites = cbind(WOLLONGONG = ts(data = tSiteList$OZONE$WOLLONGONG, start = c(2012,1), frequency = 12), 
 
-                    WAGGAWAGGANORTH = ts(data = time_by_poll$OZONE$WAGGAWAGGANORTH, start = c(2012,1), frequency = 12), 
+                    OAKDALE = ts(data = tSiteList$OZONE$OAKDALE, start = c(2012,1), frequency = 12), 
 
-                    CAMDEN = ts(data = time_by_poll$OZONE$CAMDEN, start = c(2012,1), frequency = 12)) 
+                    WAGGAWAGGANORTH = ts(data = tSiteList$OZONE$WAGGAWAGGANORTH, start = c(2012,1), frequency = 12), 
+
+                    BERESFIELD = ts(data = tSiteList$OZONE$BERESFIELD, start = c(2012,1), frequency = 12)) 
 
 dygraph(data = Ozone.sites,  
 
@@ -265,7 +423,7 @@ dygraph(data = Ozone.sites,
 
   dySeries(name = "WOLLONGONG", stepPlot = FALSE, color = "red") %>% 
 
-  dyGroup(c("RICHMOND", "WAGGAWAGGANORTH", "CAMDEN"), drawPoints = FALSE,  
+  dyGroup(c("OAKDALE", "WAGGAWAGGANORTH", "BERESFIELD"), drawPoints = FALSE,  
 
           color = c("blue", "green", "black")) %>% 
 
@@ -273,11 +431,123 @@ dygraph(data = Ozone.sites,
   
   dyRangeSelector() 
 
+### Can be used to compare means of industrial / Urban / Rural sites for each pollutant 
+
+
+
+```
+
+### 3.2. Map Sensor Data Points 
+```{r}
+
+# Map Points on the map first using Target Points 
+
+library(leaflet)
+leaflet() %>%
+  addTiles()
+
+leaflet() %>%
+  addTiles() %>%
+  addScaleBar() %>%
+  setView(lng = 151.209, lat = -33.868, zoom = 5.5) %>%
+  addMiniMap()
+
+base <- leaflet() %>%
+  addTiles() %>%
+  addScaleBar() %>%
+  setView(lat = mean(TargetPoints$Lat), lng = mean(TargetPoints$Long), zoom = 6)
+
+base %>% addMarkers(
+  lng = TargetPoints$Long, lat = TargetPoints$Lat,
+  label = TargetPoints$Site
+) 
+
+#Colour the clusters 
+cols <- c("darkred", "darkgreen", "orange")
+color_function <- colorFactor(cols, domain = NULL)
+
+base %>%
+  addCircleMarkers(
+    lng = TargetPoints$Long, lat = TargetPoints$Lat,
+    color = color_function(TargetPoints$Region),
+    label = TargetPoints$Region
+  ) %>%
+  addLegend(pal = color_function, values = TargetPoints$Region)
+
 
 ```
 
 
-#Rbeast Irregular 
+###3.2.1 Map the average concentration of air pollution over time at differeint target sites
+```{r}
+
+#Boxplot? 
+
+
+```
+
+#3.3 PCA Analysis 
+### Computing target sites and pollutants to see if sites clump into Rural/Urban/Industrial 
+```{r}
+#Colour by TargetSites$Region
+install.packages("factoextra")
+library(ggplot2)
+library("factoextra")
+
+
+PmPCAdf = tSiteList$PM10
+Pm10PCA = princomp(PmPCAdf[2:ncol(PmPCAdf)])
+plot(Pm10PCA)
+
+View(tSiteList$PM10)
+#PCA highlighting groups of highest contributing values 
+#THis should correlate between urban /rural and / urban regions 
+fviz_pca_var(Pm10PCA, col.var = "contrib",
+             gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),
+             main = "PM10 PCA Highest Contributing Sites"
+             )
+
+fviz_pca_ind(Pm10PCA,
+             geom.ind = "point", # show points only (nbut not "text")
+             col.ind =  **** , # color by groups
+             palette = c("#00AFBB", "#E7B800", "#FC4E07"),
+             addEllipses = TRUE, # Concentration ellipses
+             legend.title = "Groups"
+             )
+
+
+grp <- as.factor(tSiteList$PM10)
+
+fviz_pca_var(Pm10PCA, col.var = grp, 
+             palette = c("#0073C2FF", "#EFC000FF", "#868686FF"),
+             legend.title = "Cluster")
+
+biplot(Pm10PCA,
+       col=c("red", "blue"),
+       cex=c(0.01, 0.5))
+
+
+
+NO2PCAdf = tSiteList$NO2
+NO2PCA = princomp(NO2PCAdf[2:ncol(NO2PCAdf)])
+plot(NO2PCA)
+biplot(NO2PCA,
+       col= as.factor( ),
+       cex=c(0.01, 0.5)
+       )
+
+
+dfdf = time_by_poll$NO2
+pca = princomp(dfdf[2:ncol(dfdf)])
+plot(pca)
+biplot(pca)
+
+
+
+```
+
+
+#4. Rbeast Irregular 
 ### Plotting the decomposition and change points of Pollution and Site data using the package (Beast) 
 ```{r}
 
@@ -312,14 +582,14 @@ plot(o)
 ## Manually compute for each target site (18-24)
 ### This allows individual data to be assessed for sites oncemore and allow invidual .tiff files to be named accordingly and exported 
 
-#### View the data frame to know which target location corresponds to each , :ncol
+### View the data frame to know which target location corresponds to each , :ncol
 View(time_by_poll$OZONE)
 
 
 tiff("OZONE_RICHMOND")
 
-dates = as.Date(time_by_poll$OZONE[,1], "%d/%m/%Y")  
-Y     = time_by_poll$OZONE[,17:ncol(time_by_poll$OZONE)] #Example ncol 17 = RICHMOND (target site = TRUE)
+dates = as.Date(tSiteList$OZONE[,1], "%d/%m/%Y")  
+Y     = tSiteList$OZONE[,17:ncol(tSiteList$OZONE)] #Example ncol 17 = RICHMOND (target site = TRUE)
 Y[Y==0]=NA 
 
 OZONE_RICHMOND = beast.irreg( log(Y[,1]),time=dates,  deltat = 1/365, freq=365/1,  tseg.min=30, sseg.min=180)
@@ -328,18 +598,26 @@ plot(OZONE_RICHMOND)
 dev.off() 
 
 
-
-
-#Compute for each Site Region 
-##(Industrial, Urban, Rural) for (NO2, OZONE, PM10)
-### Use DPIE Point file data to classify target sites 
-
+#Create Loop... for each location and each pollutant 
+### Collect the outputs (R2 & NCP for Trend & season)
 
 
 ```
 
+#5. Make Point file into an SF object to begin spatial plot 
+### Aim is to plot the pollution data concentrations over time within NSW 
+#### This will then be correlated with NSW local government zoning (industrial/urban/rural)
+```{r}
 
-#Binomial Analysis 
+View(TargetPoints)
+
+
+#sts.sf vibes 
+
+```
+
+
+#6. Binomial Analysis ??? - may not be needed... 
 ## Computing to see if there is significant difference between sites and their air pollution concentrations 
 ```{r}
 
@@ -358,22 +636,9 @@ dev.off()
 ```
 
 
-#Make Point file into an SF object to begin rasterisation 
-### Aim is to plot the pollution data concentrations over time within NSW 
-#### This will then be correlated with NSW local government zoning (industrial/urban/rural)
-```{r}
-#load point file data 
 
-Pointfile <- read.csv("Data/PointFile.csv") 
-
-#sts.sf vibes 
-
-```
-
-
-
-#Load and Clean Meterological Data 
-### Eventually might look into the impacts meterological variables have on Air Pollution 
+#7. Load and Clean Meterological Data ?? 
+### Eventually might look into the subsetting a time frame to assess impacts meterological variables have on Air Pollution 
 ```{r}
 
 #Load Meteorological data  
