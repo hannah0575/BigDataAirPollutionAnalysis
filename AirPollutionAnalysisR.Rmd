@@ -32,6 +32,13 @@ output: html_document
 
 #install.packages("vegan")
 
+#install.packages("dygraphs") 
+
+#install.packages("xts") 
+
+#install.packages("data.table")
+
+#install.packages("factoextra")
 
 
 library("Rbeast")  
@@ -51,6 +58,16 @@ library("lubridate")
 library(reshape2) 
 
 library(vegan)
+
+library(xts) 
+
+library(dygraphs) 
+
+library(data.table)
+
+library(leaflet)
+
+library("factoextra")
 
 ``` 
 
@@ -228,48 +245,6 @@ ts(time_by_poll$PM2.5$LIDCOMBE)
 ###tSiteList for BEAST Plotting 
 ```{r}
 
-target_tsdata = list() 
-
-for (colname in colnames(PollSites)) { 
-
-# Split the column headers on the dots 
-
-  parts = unlist(strsplit(colname, ".", fixed=TRUE)) 
-
-  # message(parts) 
-
-  site = parts[1] 
-
-  if (length(parts) == 2) { 
-
-    pollutant = parts[2] 
-
-  } 
-
-# reassemble with Site (1) and Pollutants (2) 
-
-  else { 
-
-    pollutant = paste (parts[2], parts[3], sep=".") 
-
-  } 
-
-
-  #  create data frame 
-
-  if (is.null(target_tsdata[[pollutant]])) { 
-
-    dates = lubridate::dmy(PollSites[["Date"]]) #makes "Date" a date class 
-
-    target_tsdata[[pollutant]] = data.frame (Date = dates) 
-
-  } else { 
-    target_tsdata[[pollutant]][site] = PollSites[[colname]] 
-  } 
-
-} 
-
-
 #Create Data Frames and List with just Target Sites 
 ###Make data frames with key Target sites 
 TargetSites <- c('Date', 'WOLLONGONG', 'MUSWELLBROOK', 'SINGLETON', 'CAMBERWELL', 'WAGGAWAGGANORTH', 'RICHMOND', 'CAMDEN', 'CHULLORA', 'EARLWOOD', 'WALLSEND', 'BERESFIELD', 'BARGO', 'BRINGELLY', 'PROSPECT', 'STMARYS', 'OAKDALE', 'RANDWICK', 'ROZELLE', 'NEWCASTLE', 'KEMBLAGRANGE', 'ALBIONPARKSOUTH')
@@ -318,10 +293,6 @@ TargetPoints <- TargetPoint[-103,]
 ###Good for plotting relationships 
 ```{r}
 
-#install.packages("data.table")
-library(data.table)
-
-
 # Flip data tables from wide to long 
 OzoneTest.long <- melt(tSiteList$OZONE,
   id.vars = c("Date"),
@@ -362,7 +333,6 @@ View(TARGETpoints)
 
 
 ### Merge the each pollutant to the Target Point Data  
-library(dplyr)
 
 TargetNO2 <- left_join(NO2Test.long, TARGETpoints, by = "Sites")
 #View(TargetNO2)
@@ -390,15 +360,6 @@ TARGETDATA = list(
 ```{r} 
 
 #plot the time series data to in interactive time plot  
-
-install.packages("dygraphs") 
-
-library(dygraphs) 
-
-install.packages("xts") 
-
-library(xts) 
-
 
 #Plot multiple locations on a single dygraph
 ## Find means that vary greatest to plot 
@@ -433,16 +394,48 @@ dygraph(data = Ozone.sites,
 
 ### Can be used to compare means of industrial / Urban / Rural sites for each pollutant 
 
+```
+
+
+#3.1.2 Looking at the average pollution trends over time within each region 
+##Creating time series regional trends over time  gifs 
+```{r}
+
+# Manually screen and watch for each pollutant (OZONE, PM10, NO2)
+
+
+#tiff("PM10_2012-2022.tiff")
+
+AniPM <- ggplot(
+  TARGETDATA$PM10,
+  aes(Date, PM10, group = Region, color = factor(Region))
+  ) +
+  geom_line() +
+  scale_color_viridis_d() +
+  labs(x = "Years", y = "PM10 concentration") +
+  theme(legend.position = "right") 
+
+
+
+#dev.off()
+
+
+PMAnimate <- AniPM + transition_reveal(Date)
+
+PMAnimate
+
+#Save animation as .gif
+anim_save("NO2_2012_22.gif")
 
 
 ```
+
 
 ### 3.2. Map Sensor Data Points 
 ```{r}
 
 # Map Points on the map first using Target Points 
 
-library(leaflet)
 leaflet() %>%
   addTiles()
 
@@ -478,54 +471,32 @@ base %>%
 ```
 
 
-###3.2.1 Map the average concentration of air pollution over time at differeint target sites
+###3.2.1 Map the average concentration of air pollution over time at different target sites
 ```{r}
 
 #Boxplot? 
 
+View(TARGETDATA$PM10)
+
+# TRANSFOMRATIONS - to see if the data better reflects assumptions 
+## LOG
+TargetPmLog<- log(TARGETDATA$PM10$PM10)+1
+## SQRT
+TARGETDATA$PM10$PMsqrt=sqrt(TARGETDATA$PM10$PM10)
 
 ```
+
 
 #3.3 PCA Analysis 
 ### Computing target sites and pollutants to see if sites clump into Rural/Urban/Industrial 
 ```{r}
 #Colour by TargetSites$Region
-install.packages("factoextra")
-library(ggplot2)
-library("factoextra")
 
-
-PmPCAdf = tSiteList$PM10
-Pm10PCA = princomp(PmPCAdf[2:ncol(PmPCAdf)])
-plot(Pm10PCA)
-
-View(tSiteList$PM10)
-#PCA highlighting groups of highest contributing values 
-#THis should correlate between urban /rural and / urban regions 
-fviz_pca_var(Pm10PCA, col.var = "contrib",
-             gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),
-             main = "PM10 PCA Highest Contributing Sites"
-             )
-
-fviz_pca_ind(Pm10PCA,
-             geom.ind = "point", # show points only (nbut not "text")
-             col.ind =  **** , # color by groups
-             palette = c("#00AFBB", "#E7B800", "#FC4E07"),
-             addEllipses = TRUE, # Concentration ellipses
-             legend.title = "Groups"
-             )
-
-
-grp <- as.factor(tSiteList$PM10)
-
-fviz_pca_var(Pm10PCA, col.var = grp, 
-             palette = c("#0073C2FF", "#EFC000FF", "#868686FF"),
-             legend.title = "Cluster")
+## Basic biplots
 
 biplot(Pm10PCA,
        col=c("red", "blue"),
        cex=c(0.01, 0.5))
-
 
 
 NO2PCAdf = tSiteList$NO2
@@ -537,11 +508,60 @@ biplot(NO2PCA,
        )
 
 
-dfdf = time_by_poll$NO2
-pca = princomp(dfdf[2:ncol(dfdf)])
-plot(pca)
-biplot(pca)
+PmPCAdf = tSiteList$PM10
+Pm10PCA = princomp(PmPCAdf[2:ncol(PmPCAdf)])
+plot(Pm10PCA)
 
+OzPCAdf = tSiteList$OZONE
+Oz10PCA = princomp(OzPCAdf[2:ncol(OzPCAdf)])
+plot(Oz10PCA)
+
+
+## PCA highlighting groups of highest contributing values 
+# THis should correlate between urban /rural and / urban regions 
+
+pcadf = Oz10PCA, Pm10PCA, NO2PCA
+
+for (pca in pcadf){
+  fviz_pca_var(pcadf,
+               col.var = "cos2",
+               gradient.cols = c("#E7B800","#00AFBB","#FC4E07"), 
+               repel = TRUE
+             ) 
+}
+
+
+#NO2
+fviz_pca_var(NO2PCA, col.var = "cos2",
+             gradient.cols = c("#E7B800","#00AFBB","#FC4E07"), 
+             repel = TRUE # Avoid text overlapping
+             )
+
+#PM10
+fviz_pca_var(PmPCA, col.var = "cos2",
+             gradient.cols = c("#E7B800","#00AFBB","#FC4E07"), 
+             repel = TRUE # Avoid text overlapping
+             )
+#OZONE
+#tiff("OZONE_PCA.tiff")
+
+fviz_pca_var(Oz10PCA, col.var = "cos2",
+             gradient.cols = c("#E7B800","#00AFBB","#FC4E07"), 
+             repel = TRUE # Avoid text overlapping
+             )
+
+#dev.off()
+
+
+
+##HOW TO GROUP DATA BY REGION???? DONT KNOW YET 
+fviz_pca_ind(Pm10PCA,
+             geom.ind = "point", # show points only (nbut not "text")
+             col.ind =  TARGETDATA$PM10$Region (???) , # color by groups
+             palette = c("#00AFBB", "#E7B800", "#FC4E07"),
+             addEllipses = TRUE, # Concentration ellipses
+             legend.title = "Groups"
+             )
 
 
 ```
@@ -550,8 +570,6 @@ biplot(pca)
 #4. Rbeast Irregular 
 ### Plotting the decomposition and change points of Pollution and Site data using the package (Beast) 
 ```{r}
-
-library(Rbeast)
 
 # Zhao Rbeast Example - Run to manipluate to Air_poll Data 
 # Monthly data Example 
@@ -602,19 +620,35 @@ dev.off()
 ### Collect the outputs (R2 & NCP for Trend & season)
 
 
+
+
 ```
 
-#5. Make Point file into an SF object to begin spatial plot 
+#5. Make Point file into an SF object to begin spatial time series animation  
 ### Aim is to plot the pollution data concentrations over time within NSW 
 #### This will then be correlated with NSW local government zoning (industrial/urban/rural)
 ```{r}
+View(TARGETDATA)
 
-View(TargetPoints)
+#install.packages('gganimate')
+#install.packages('gifski')
+install.packages('ozmaps')
+library(gganimate)
+library(gifski)
+library(ggplot2)
+library(ozmaps)
+library(sf)
+#install.packages('rgdal')
+#install.packages('RColorBrewer')
+library(rgdal)
+library(RColorBrewer)
 
 
-#sts.sf vibes 
-
+sf_oz <- ozmap("states")
+NSWmap <- ggplot(data = *** ) + geom_sf()
+NSWmap
 ```
+
 
 
 #6. Binomial Analysis ??? - may not be needed... 
