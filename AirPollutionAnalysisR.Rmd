@@ -616,13 +616,27 @@ plot(OZONE_RICHMOND)
 #dev.off() 
 
 
+
+
 #Create Loop... for each location and each pollutant 
 ### Collect the outputs (R2 & NCP for Trend & season)
 
+(Beast1 <- tSiteList$OZONE)
+(Beast2 <- tSiteList$NO2)
+(Beast3 <- tSiteList$PM10)
+ 
+data <- c(Beast1, Beast2, Beast3)
 
+beastoutputs = list()
+for (beast in data) {
 
-
-
+ dates = as.Date(data[,1], "%d/%m/%Y") 
+ Y     = data[,2:ncol(data)]
+ 
+ beastoutputs = beast.irreg(log(Y[,1]),time=dates,deltat=1/12, freq=12, tseg.min=3, sseg.min=6)
+ plot(beastoutputs)
+ 
+}
 
 
 ```
@@ -650,6 +664,9 @@ library(RColorBrewer)
 sf_oz <- ozmap("states")
 NSWmap <- ggplot(data = *** ) + geom_sf()
 NSWmap
+
+
+
 ```
 
 
