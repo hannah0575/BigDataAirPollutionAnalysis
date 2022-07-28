@@ -40,6 +40,19 @@ output: html_document
 
 #install.packages("factoextra")
 
+#install.packages('devtools')
+
+#install.packages('geo')
+
+#install.packages('maps')
+
+#install.packages('mapdata')
+
+#install.packages('cowplot')
+
+#install.packages('ggmap')
+
+#install.packages('usethis')
 
 library("Rbeast")  
 
@@ -68,6 +81,26 @@ library(data.table)
 library(leaflet)
 
 library("factoextra")
+
+library(raster)
+
+library(rgdal)
+
+library(usethis)
+
+library(maps)
+
+library(mapdata)
+
+library(cowplot)
+
+library(ggmap)
+
+library(devtools)
+
+library(geo)
+
+
 
 ``` 
 
@@ -351,6 +384,7 @@ TARGETDATA = list(
   "NO2" = TARGETDATA[[3]]
 )
 
+#View(TARGETDATA$PM10)
 #View(TARGETDATA)
 
 ```
@@ -436,7 +470,7 @@ anim_save("NO2_2012_22.gif")
 
 # Map Points on the map first using Target Points 
 
-leaflet() %>%
+Map <- {leaflet() %>%
   addTiles()
 
 leaflet() %>%
@@ -467,6 +501,7 @@ base %>%
   ) %>%
   addLegend(pal = color_function, values = TargetPoints$Region)
 
+}
 
 ```
 
@@ -484,6 +519,211 @@ TargetPmLog<- log(TARGETDATA$PM10$PM10)+1
 ## SQRT
 TARGETDATA$PM10$PMsqrt=sqrt(TARGETDATA$PM10$PM10)
 
+
+library(rgdal)
+library(RColorBrewer)
+library(devtools)
+# install_github("tidyverse/ggplot2")
+
+library(maps)
+library(mapdata)
+library(lubridate)
+library(tidyverse)
+library(cowplot)
+theme_set(theme_grey())
+library(ggmap)
+
+
+#TAGRETDATA - get the mean of each pollutant / year 
+
+
+TARGETDATA$OZONE$year <- floor_date(TARGETDATA$OZONE$Date, "year")
+
+View(TARGETDATA$OZONE)
+
+#aggregate yearly 
+TARGETDATA$OZONE$year <- floor_date(TARGETDATA$OZONE$Date, "year")
+
+##OZONE
+YearlyOZONE <- TARGETDATA$OZONE %>%                         # Aggregate data
+  group_by(year,Region) %>% 
+  dplyr::summarize(Ozone = mean(Ozone)) %>% 
+  as.data.frame()
+
+
+#View(YearlyOZONE)
+
+
+##PM10
+TARGETDATA$PM10$year <- floor_date(TARGETDATA$PM10$Date, "year")
+YearlyPM10 <- TARGETDATA$PM10 %>%                         # Aggregate data
+  group_by(year,Region) %>% 
+  dplyr::summarize(PM10 = mean(PM10)) %>% 
+  as.data.frame()
+
+
+##NO2
+TARGETDATA$NO2$year <- floor_date(TARGETDATA$NO2$Date, "year")
+YearlyNO2 <- TARGETDATA$NO2 %>%                         # Aggregate data
+  group_by(year, Region) %>% 
+  dplyr::summarize(NO2 = mean(NO2)) %>% 
+  as.data.frame()
+
+#View(YearlyNO2)
+
+
+#MAke a yearly dataframe 
+
+YearlyPollut <- left_join(YearlyOZONE, YearlyPM10, by = "year", "Region")
+YearlyPollutants <- left_join(YearlyPollut, YearlyNO2, by = "year", "Region")
+MeanYrSitePollution <- YearlyPollutants[,-2]
+YearlySitePollution <- MeanYrSitePollution [,-3]
+
+
+View(YearlySitePollution)
+
+#Add lat and long etc. data
+
+YearlySitePollDATA <- left_join(YearlySitePollution, TARGETpoints, by = "Region")
+
+YearlySitePollDATA <-YearlySitePollDATA[, c(1, 4, 6, 7, 8, 9, 2, 3, 5)]
+
+
+View(YearlySitePollDATA)
+
+MeanYrPolluteData <- cbind(YearlySitePollDATA,Pollution=apply(YearlySitePollDATA[7:9],1,mean, na.rm=TRUE))
+
+MeanYrPolluteData = subset(MeanYrPolluteData, select = -c(7:9) )
+
+
+
+#Combine pollution (NO2, PM10, Ozone - average)
+## Only aiming to see which sites have the greatest average pollution change over time 
+
+
+YearlySitePollDATA %>% bind_rows(YearlySitePollDATA(z[1:7,], mean))
+
+
+
+
+
+#Plotting spatial data points 
+TARGETDATA$PM10 %>%
+ggplot(aes(Long, Lat)) +
+geom_point(colour = "red") %>%
+
+  
+library(maps)
+library(mapdata)
+library(sp)
+
+#Downloading NSW shapefile 
+
+library(ozmaps)
+library(sf)
+
+oz_states <- ozmaps::ozmap_states
+
+NSWmap <- ggplot() + 
+          geom_sf(data = oz_states, mapping = aes(fill = NULL), show.legend = FALSE) +
+          coord_sf(xlim = c(145, 155), ylim=c(-31, -37)) 
+
+#Plotting Ozone target points 
+  z1 <- NSWmap + geom_point(data = TARGETDATA$OZONE, aes(Long, Lat, colour = Region))
+  plot_grid(z1)
+  
+#Plotting Ozone concentrations by size 
+  z2 <- NSWmap + 
+  geom_point(data = TARGETDATA$OZONE, aes(Long, Lat, size = Ozone), colour = "red", alpha = 0.2) +
+  scale_size_area(max_size = 6)
+  
+  plot_grid(z2)
+  
+  
+library(reshape2)
+ View(TARGETDATA$OZONE)
+ 
+   ggplot(data = YearlySitePollDATA , aes(x = Long, y = Lat, fill = Ozone, group = Region)) + 
+    geom_polygon() + geom_point(colour = "grey", lwd = 0.1) + coord_equal() + 
+    facet_wrap(~year)
+     
+  
+YearlySitePollDATA  
+     
+#plotting points in lat and long just location 
+ggplot(YearlySitePollDATA , aes(Long, Lat)) +
+  geom_point(data = YearlySitePollDATA, aes(x = Long, y = Lat), color = "red", size = 1) +
+  scale_fill_viridis_c(option = "magma") +
+  coord_quickmap() +
+  labs(fill = "Region") +
+  ggtitle("Ozonepoints") +
+  theme_classic()
+   
+#### TEST 1 
+map_with_data <- NSWmap +
+  geom_point(data = MeanYrPolluteData, aes(x = Long, y = Lat, color=Region, size=Pollution, group=Sites, alpha = 0.3)) +
+   scale_radius()
+
+map_with_data
+
+
+transition_time(year) +
+  ggtitle('Year: {floor(frame_time)}',
+          subtitle = 'Frame {frame} of {nframes}') +
+  shadow_mark() +
+  scale_color_gradient(low = "green", high = "red")
+
+animate(map_with_data, nframes = num_frames, fps = 3)
+
+
+map_with_animation <- map_with_data +
+  transition_time(year) +
+  ggtitle('Year: {frame_time}',
+          subtitle = 'Frame {frame} of {nframes}')
+num_years <- max(test_data$year) - min(test_data$year) + 1
+animate(map_with_animation, nframes = num_years)
+
+
+
+
+map_with_animation <- map_with_data +
+  transition_time(year) +
+  ggtitle('Year: {frame_time}',
+          subtitle = 'Frame {frame} of {nframes}')
+num_years <- max(MeanYrPolluteData$year) - min(MeanYrPolluteData$year) + 1
+animate(map_with_animation, nframes = num_years)
+
+
+
+
+
+
+
+
+##### TEST 3 
+
+p <- ggplot(
+MeanYrPolluteData, 
+  aes(x = Long, y=Lat, size = Pollution, colour = Region)
+  ) +
+  geom_point(show.legend = FALSE, alpha = 0.7) +
+  scale_color_viridis_d() +
+  scale_size(range = c(4, 11)) +
+  scale_x_log10() +
+  labs(x = "Long", y = "Lat")
+
+p 
+
+
+library(gganimate)
+
+year <- MeanYrPolluteData()
+
+p + transition_time(year) +
+  labs(title = "Year: {frame_time}")
+
+
+
 ```
 
 
@@ -494,41 +734,21 @@ TARGETDATA$PM10$PMsqrt=sqrt(TARGETDATA$PM10$PM10)
 
 ## Basic biplots
 
-biplot(Pm10PCA,
-       col=c("red", "blue"),
-       cex=c(0.01, 0.5))
-
 
 NO2PCAdf = tSiteList$NO2
 NO2PCA = princomp(NO2PCAdf[2:ncol(NO2PCAdf)])
-plot(NO2PCA)
-biplot(NO2PCA,
-       col= as.factor( ),
-       cex=c(0.01, 0.5)
-       )
 
 
 PmPCAdf = tSiteList$PM10
-Pm10PCA = princomp(PmPCAdf[2:ncol(PmPCAdf)])
-plot(Pm10PCA)
+PmPCA = princomp(PmPCAdf[2:ncol(PmPCAdf)])
+
 
 OzPCAdf = tSiteList$OZONE
-Oz10PCA = princomp(OzPCAdf[2:ncol(OzPCAdf)])
-plot(Oz10PCA)
+OzPCA = princomp(OzPCAdf[2:ncol(OzPCAdf)])
 
 
 ## PCA highlighting groups of highest contributing values 
 # THis should correlate between urban /rural and / urban regions 
-
-pcadf = Oz10PCA, Pm10PCA, NO2PCA
-
-for (pca in pcadf){
-  fviz_pca_var(pcadf,
-               col.var = "cos2",
-               gradient.cols = c("#E7B800","#00AFBB","#FC4E07"), 
-               repel = TRUE
-             ) 
-}
 
 
 #NO2
@@ -545,23 +765,12 @@ fviz_pca_var(PmPCA, col.var = "cos2",
 #OZONE
 #tiff("OZONE_PCA.tiff")
 
-fviz_pca_var(Oz10PCA, col.var = "cos2",
+fviz_pca_var(OzPCA, col.var = "cos2",
              gradient.cols = c("#E7B800","#00AFBB","#FC4E07"), 
              repel = TRUE # Avoid text overlapping
              )
 
 #dev.off()
-
-
-
-##HOW TO GROUP DATA BY REGION???? DONT KNOW YET 
-fviz_pca_ind(Pm10PCA,
-             geom.ind = "point", # show points only (nbut not "text")
-             col.ind =  TARGETDATA$PM10$Region (???) , # color by groups
-             palette = c("#00AFBB", "#E7B800", "#FC4E07"),
-             addEllipses = TRUE, # Concentration ellipses
-             legend.title = "Groups"
-             )
 
 
 ```
@@ -573,7 +782,10 @@ fviz_pca_ind(Pm10PCA,
 
 # Zhao Rbeast Example - Run to manipluate to Air_poll Data 
 # Monthly data Example 
-df    = read.csv('https://github.com/zhaokg/Rbeast/raw/master/R/SampleData/pm10_1658112168.csv',header=FALSE,skip=3)
+df    = read.csv('https://github.com/zhaokg/Rbeast/raw/master/R/SampleData/pm10_1658112168.csv',
+                 header=FALSE, 
+                 skip=3
+                 )
 
 dates = as.Date(df[,1], "%d/%m/%Y")  # the 1st col is dates
 Y     = df[,2:ncol(df)]              # the rest are PM10 data for the several sample sites
@@ -583,16 +795,16 @@ o = beast.irreg(log(Y[,1]),time=dates,deltat=1/12, freq=12, tseg.min=3, sseg.min
 plot(o)
 
 # log(Y[,1]) :  Log-transformation may help if data is skewed bcz the BEAST model 
-                assumes Gaussian errors;
+                # assumes Gaussian errors;
 # time=dates :  Use the 'time' arg to supply the times of individual data points.
-               Alternatively, the `beast123' function also handles date strings of different formats
+              # Alternatively, the `beast123' function also handles date strings of different formats
 # deltat=1/12:  Aggregate the daily time series into a regular one at the interval 
-                of 1 month=1/12 year
+               # of 1 month=1/12 year
 # freq=12 :    The period is 1 year, which is 12 data points (1.0/deltat=12)
 # tseg.min:     The minimum trend segment length allowed in the changepoint detection is 3 data points (3 months) 
-                -- the results MAY be sensitive to this parameter
+            #    -- the results MAY be sensitive to this parameter
 # sseg.min:     The minimum seasonal segment length allowed in the changepoint detection is 6 data points (6 months) 
-                -- the results MAY be sensitive to this parameter
+             #   -- the results MAY be sensitive to this parameter
 
 
 #Daily Rbeast time series decomposition using time_by_poll Site data 
@@ -610,7 +822,7 @@ dates = as.Date(tSiteList$OZONE[,1], "%d/%m/%Y")
 Y     = tSiteList$OZONE[,17:ncol(tSiteList$OZONE)] #Example ncol 17 = RICHMOND (target site = TRUE)
 Y[Y==0]=NA 
 
-OZONE_RICHMOND = beast.irreg( log(Y[,1]),time=dates,  deltat = 1/365, freq=365/1,  tseg.min=30, sseg.min=180)
+OZONE_RICHMOND = beast.irreg( log(Y[,1]+1),time=dates,  deltat = 1/365, freq=365/1,  tseg.min=30, sseg.min=180)
 plot(OZONE_RICHMOND)
 
 #dev.off() 
@@ -621,22 +833,82 @@ plot(OZONE_RICHMOND)
 #Create Loop... for each location and each pollutant 
 ### Collect the outputs (R2 & NCP for Trend & season)
 
-(Beast1 <- tSiteList$OZONE)
-(Beast2 <- tSiteList$NO2)
-(Beast3 <- tSiteList$PM10)
- 
-data <- c(Beast1, Beast2, Beast3)
-
-beastoutputs = list()
-for (beast in data) {
-
- dates = as.Date(data[,1], "%d/%m/%Y") 
- Y     = data[,2:ncol(data)]
- 
- beastoutputs = beast.irreg(log(Y[,1]),time=dates,deltat=1/12, freq=12, tseg.min=3, sseg.min=6)
- plot(beastoutputs)
- 
+beastoutputs = list()  #  list of pollutants, contains lists of beast results per site
+for (pollutant in names(tSiteList)) {
+  # browser()
+  data = tSiteList[[pollutant]]
+  dates = as.Date(data[,1], "%d/%m/%Y")
+  site_names = colnames(data)
+  site_names = site_names[2:length(site_names)]  #  drop date field
+# message(site_names)
+  beastoutputs[[pollutant]] = list()  #  create a list inside the main list
+  for (site in site_names) {
+    Y = data[[site]]
+# browser()
+    b = beast.irreg(log(Y+1), time=dates, deltat=1/12, freq=12, tseg.min=3, sseg.min=6)
+    #plot(b)
+    beastoutputs[[pollutant]][[site]] = b
+  }
 }
+
+```
+
+#4.1 Boxplot of ncp for Beast Outputs 
+```{r}
+
+Beastncp <- read_csv("Outputs/BeastOutputs.csv")
+
+# trend ncp box plot 
+#Trent NCP
+
+#tiff("TrendNCP.tiff")
+
+NCPbox <- Beastncp %>%
+  ggplot(aes(x=Pollutant, y=Trend_ncp, fill=factor(Region))) +
+   geom_boxplot() + 
+   theme_minimal()+
+  labs(y = "Number of Change Points", 
+       fill = "Region",
+       x = "Pollutant",
+       title = "Number of Trend Change Points 2012-22")
+    
+NCPbox+scale_fill_manual(values=c("darkgoldenrod1",
+                               "tomato1",
+                               "sienna4"
+                               ))
+
+#dev.off()
+
+#Seasonal NCP 
+
+#tiff("SeasonalNCP.tiff")
+NcpBox <- Beastncp %>% 
+  ggplot(aes(x=Pollutant, y=Season_ncp, fill=factor(Region),)) +
+   geom_boxplot() + 
+   theme_minimal()+
+  labs(y = "Number of Change Points", 
+       fill = "Region",
+       x = "Pollutant",
+       title = "Number of Seasonal Change Points 2012-22")
+    
+NcpBox+scale_fill_manual(values=c("darkgoldenrod1",
+                               "tomato1",
+                               "sienna4"
+                               ))
+#dev.off()
+
+
+
+#NCP scatter Plot - Dont't know if this is right to use...
+
+NCP.shape <- ggplot(Beastncp, aes(Trend_ncp, Season_ncp, shape = Pollutant, colour = Region, xlab = "Trend Change Points", ylab = "Seasonal Change Points"))  +
+  geom_point()
+
+mytheme <- theme(panel.grid.minor = element_blank(), panel.grid.major = element_blank())
+
+print(NCP.shape + scale_shape_manual(values = c(15, 16, 17)) + scale_colour_manual(values = c("darkgoldenrod1", "sienna4", "tomato1"))) + mytheme
+
+
 
 
 ```
@@ -649,94 +921,46 @@ View(TARGETDATA)
 
 #install.packages('gganimate')
 #install.packages('gifski')
-install.packages('ozmaps')
+#install.packages('ozmaps')
+#install.packages('rasterize')
+#install.packages('rgdal')
+#install.packages('RColorBrewer')
 library(gganimate)
 library(gifski)
 library(ggplot2)
 library(ozmaps)
 library(sf)
-#install.packages('rgdal')
-#install.packages('RColorBrewer')
 library(rgdal)
 library(RColorBrewer)
-
+library(devtools)
+# install_github("tidyverse/ggplot2")
+library(geo)
+library(maps)
+library(mapdata)
+library(lubridate)
+library(tidyverse)
+library(cowplot)
+theme_set(theme_grey())
+library(ggmap)
 
 sf_oz <- ozmap("states")
 NSWmap <- ggplot(data = *** ) + geom_sf()
 NSWmap
 
 
+# rename colnames for raster
+colnames(df) <- c('x', 'y', 'vals')
 
-```
-
-
-
-#6. Binomial Analysis ??? - may not be needed... 
-## Computing to see if there is significant difference between sites and their air pollution concentrations 
-```{r}
-
-#Binomial GLM - Need to account for the effects surrounding daily data may have
-
-#Show data skew 
-
-
-#log transform data 
+RasterPM10 <- setnames(TARGETDATA$PM10, old = c('Long','Lat',"PM10"), new = c('x','y',"vals"))
+RasterOZONE <- setnames(TARGETDATA$OZONE, old = c('Long','Lat',"Ozone"), new = c('x','y',"vals"))
+RasterNO2 <- setnames(TARGETDATA$NO2, old = c('Long','Lat',"NO2"), new = c('x','y',"vals"))
 
 
 
-#Binomial for individual sites? Grouped site regions? 
+
+
+
 
 
 ```
-
-
-
-#7. Load and Clean Meterological Data ?? 
-### Eventually might look into the subsetting a time frame to assess impacts meterological variables have on Air Pollution 
-```{r}
-
-#Load Meteorological data  
-
-TempHrData<- read.csv("Data/MeteorData/AirTemp/TsTemp_1hr.csv") 
-
-HumidHrData<- read.csv("Data/MeteorData/Humidity/TsHumid_1hr.csv") 
-
-WsHrData <- read.csv("Data/MeteorData/WindSpeed/TsWS_1hr.csv") 
-
-  
-#remove top empty row and rename columns  
-
-
-#temp 
-
-names(TempHrData) <- TempHrData[1,] 
-
-TempHr <- TempHrData[-1,] 
-
-colnames(TempHr)[1] <- c('Date')  
-
-colnames(TempHr)[2] <- c('Time') 
-
-
-#wind speed  
-
-names(WsHrData) <- WsHrData[2,] 
-
-WsHr <- WsHrData[-1,] 
-
-WsHr <- WsHr[-1,] 
-
-
-#Humidity 
-
-names(HumidHrData) <- HumidHrData[2,] 
-
-HumidHr <- HumidHrData[-1,] 
-
-HumidHr <- WsHr[-1,] 
-
-  
-```
-
-
 
