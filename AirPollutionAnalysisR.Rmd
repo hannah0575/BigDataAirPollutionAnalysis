@@ -98,8 +98,32 @@ library(ggmap)
 
 library(devtools)
 
-library(geo)
 
+
+
+#install.packages('gganimate')
+#install.packages('gifski')
+#install.packages('ozmaps')
+#install.packages('rasterize')
+#install.packages('rgdal')
+#install.packages('RColorBrewer')
+library(gganimate)
+library(gifski)
+library(ggplot2)
+library(ozmaps)
+library(sf)
+library(rgdal)
+library(RColorBrewer)
+library(devtools)
+# install_github("tidyverse/ggplot2")
+
+library(maps)
+library(mapdata)
+library(lubridate)
+library(tidyverse)
+library(cowplot)
+theme_set(theme_grey())
+library(ggmap)
 
 
 ``` 
@@ -503,6 +527,8 @@ base %>%
 
 }
 
+Map
+
 ```
 
 
@@ -580,7 +606,7 @@ MeanYrSitePollution <- YearlyPollutants[,-2]
 YearlySitePollution <- MeanYrSitePollution [,-3]
 
 
-View(YearlySitePollution)
+#View(YearlySitePollution)
 
 #Add lat and long etc. data
 
@@ -589,22 +615,23 @@ YearlySitePollDATA <- left_join(YearlySitePollution, TARGETpoints, by = "Region"
 YearlySitePollDATA <-YearlySitePollDATA[, c(1, 4, 6, 7, 8, 9, 2, 3, 5)]
 
 
-View(YearlySitePollDATA)
+#View(YearlySitePollDATA)
 
 MeanYrPolluteData <- cbind(YearlySitePollDATA,Pollution=apply(YearlySitePollDATA[7:9],1,mean, na.rm=TRUE))
 
 MeanYrPolluteData = subset(MeanYrPolluteData, select = -c(7:9) )
 
+#View(MeanYrPolluteData)
 
 
-#Combine pollution (NO2, PM10, Ozone - average)
-## Only aiming to see which sites have the greatest average pollution change over time 
+#Combine pollution (NO2, PM10, Ozone - average by year)
+## Only aiming to see which regions have the greatest average pollution change over time 
 
+library(dplyr)
 
-YearlySitePollDATA %>% bind_rows(YearlySitePollDATA(z[1:7,], mean))
+MeanPollution <- MeanYrPolluteData %>% group_by(Region, Lat, Long, Sites, time = as.Date(year)) %>% summarise(across(c(Pollution), mean))
 
-
-
+View(MeanPollution)
 
 
 #Plotting spatial data points 
@@ -612,7 +639,6 @@ TARGETDATA$PM10 %>%
 ggplot(aes(Long, Lat)) +
 geom_point(colour = "red") %>%
 
-  
 library(maps)
 library(mapdata)
 library(sp)
@@ -626,7 +652,9 @@ oz_states <- ozmaps::ozmap_states
 
 NSWmap <- ggplot() + 
           geom_sf(data = oz_states, mapping = aes(fill = NULL), show.legend = FALSE) +
-          coord_sf(xlim = c(145, 155), ylim=c(-31, -37)) 
+          coord_sf(xlim = c(146, 153), ylim=c(-32, -36)) 
+
+NSWmap
 
 #Plotting Ozone target points 
   z1 <- NSWmap + geom_point(data = TARGETDATA$OZONE, aes(Long, Lat, colour = Region))
@@ -659,68 +687,55 @@ ggplot(YearlySitePollDATA , aes(Long, Lat)) +
   ggtitle("Ozonepoints") +
   theme_classic()
    
-#### TEST 1 
+#### Spatio temporal plot of average air pollution over time by region
 map_with_data <- NSWmap +
-  geom_point(data = MeanYrPolluteData, aes(x = Long, y = Lat, color=Region, size=Pollution, group=Sites, alpha = 0.3)) +
+  geom_point(data = MeanPollution, aes(x = Long, y = Lat, color=Region, size=Pollution, group=Sites, alpha = 0.3)) +
    scale_radius()
 
 map_with_data
 
-
-transition_time(year) +
-  ggtitle('Year: {floor(frame_time)}',
-          subtitle = 'Frame {frame} of {nframes}') +
-  shadow_mark() +
-  scale_color_gradient(low = "green", high = "red")
-
-animate(map_with_data, nframes = num_frames, fps = 3)
-
-
-map_with_animation <- map_with_data +
-  transition_time(year) +
-  ggtitle('Year: {frame_time}',
-          subtitle = 'Frame {frame} of {nframes}')
-num_years <- max(test_data$year) - min(test_data$year) + 1
-animate(map_with_animation, nframes = num_years)
-
-
-
-
-map_with_animation <- map_with_data +
-  transition_time(year) +
-  ggtitle('Year: {frame_time}',
-          subtitle = 'Frame {frame} of {nframes}')
-num_years <- max(MeanYrPolluteData$year) - min(MeanYrPolluteData$year) + 1
-animate(map_with_animation, nframes = num_years)
-
-
-
-
-
-
-
-
-##### TEST 3 
-
-p <- ggplot(
-MeanYrPolluteData, 
-  aes(x = Long, y=Lat, size = Pollution, colour = Region)
-  ) +
-  geom_point(show.legend = FALSE, alpha = 0.7) +
-  scale_color_viridis_d() +
-  scale_size(range = c(4, 11)) +
-  scale_x_log10() +
-  labs(x = "Long", y = "Lat")
-
-p 
-
-
-library(gganimate)
-
-year <- MeanYrPolluteData()
-
-p + transition_time(year) +
+map_with_data + transition_time(time) +
   labs(title = "Year: {frame_time}")
+
+anim_save("NSWPollution2.gif")
+
+```
+
+#3.2.2 looking a general mean pollution between regions over years 
+```{r}
+
+
+MeanPollution
+
+Pollutionbox <- MeanPollution %>%
+  ggplot(aes(x=time, y=Pollution, fill=factor(Region))) +
+   
+  
+  geom_boxplot() + 
+   theme_minimal()+
+  labs(y = "Pollution concentration (CO2e)", 
+       fill = "Region",
+       x = "time",
+       title = "Average Pollution Over Time")
+    
+Pollutionbox+scale_fill_manual(values=c("darkgoldenrod1",
+                               "tomato1",
+                               "sienna4"))
+
+
+
+p <- ggplot(data = MeanPollution, aes(x = time, y = Pollution)) +
+     labs(y = "Pollution concentration (CO2e/year)", 
+       color = "Region",
+        x = "Years",
+       title = "Average Pollution Over Time")
+p +  geom_point(aes(color = factor(Region), size=4)) + scale_color_manual(values=c("darkgoldenrod1",
+                               "tomato1",
+                               "sienna4"))
+
+p
+
+
 
 
 
@@ -907,59 +922,6 @@ NCP.shape <- ggplot(Beastncp, aes(Trend_ncp, Season_ncp, shape = Pollutant, colo
 mytheme <- theme(panel.grid.minor = element_blank(), panel.grid.major = element_blank())
 
 print(NCP.shape + scale_shape_manual(values = c(15, 16, 17)) + scale_colour_manual(values = c("darkgoldenrod1", "sienna4", "tomato1"))) + mytheme
-
-
-
-
-```
-
-#5. Make Point file into an SF object to begin spatial time series animation  
-### Aim is to plot the pollution data concentrations over time within NSW 
-#### This will then be correlated with NSW local government zoning (industrial/urban/rural)
-```{r}
-View(TARGETDATA)
-
-#install.packages('gganimate')
-#install.packages('gifski')
-#install.packages('ozmaps')
-#install.packages('rasterize')
-#install.packages('rgdal')
-#install.packages('RColorBrewer')
-library(gganimate)
-library(gifski)
-library(ggplot2)
-library(ozmaps)
-library(sf)
-library(rgdal)
-library(RColorBrewer)
-library(devtools)
-# install_github("tidyverse/ggplot2")
-library(geo)
-library(maps)
-library(mapdata)
-library(lubridate)
-library(tidyverse)
-library(cowplot)
-theme_set(theme_grey())
-library(ggmap)
-
-sf_oz <- ozmap("states")
-NSWmap <- ggplot(data = *** ) + geom_sf()
-NSWmap
-
-
-# rename colnames for raster
-colnames(df) <- c('x', 'y', 'vals')
-
-RasterPM10 <- setnames(TARGETDATA$PM10, old = c('Long','Lat',"PM10"), new = c('x','y',"vals"))
-RasterOZONE <- setnames(TARGETDATA$OZONE, old = c('Long','Lat',"Ozone"), new = c('x','y',"vals"))
-RasterNO2 <- setnames(TARGETDATA$NO2, old = c('Long','Lat',"NO2"), new = c('x','y',"vals"))
-
-
-
-
-
-
 
 
 ```
